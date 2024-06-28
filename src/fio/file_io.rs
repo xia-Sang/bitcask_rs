@@ -94,6 +94,14 @@ mod tests {
     #[test]
     fn test_file_io_write() {
         let path = PathBuf::from("./tmp/a.data");
+        if let Some(parent_dir) = path.parent() {
+            if !parent_dir.exists() {
+                if let Err(err) = fs::create_dir_all(parent_dir) {
+                    eprintln!("Error creating directories: {}", err);
+                    return;
+                }
+            }
+        }
         let fio_res = FileIO::new(path.clone());
         assert!(fio_res.is_ok());
 
@@ -111,6 +119,14 @@ mod tests {
     #[test]
     fn test_file_to_read() {
         let path = PathBuf::from("./tmp/b.data");
+        if let Some(parent_dir) = path.parent() {
+            if !parent_dir.exists() {
+                if let Err(err) = fs::create_dir_all(parent_dir) {
+                    eprintln!("Error creating directories: {}", err);
+                    return;
+                }
+            }
+        }
         let fio_res = FileIO::new(path.clone());
         assert!(fio_res.is_ok());
 
@@ -138,6 +154,14 @@ mod tests {
     #[test]
     fn test_file_io_sync() {
         let path = PathBuf::from("./tmp/c.data");
+        if let Some(parent_dir) = path.parent() {
+            if !parent_dir.exists() {
+                if let Err(err) = fs::create_dir_all(parent_dir) {
+                    eprintln!("Error creating directories: {}", err);
+                    return;
+                }
+            }
+        }
         let fio_res = FileIO::new(path.clone());
         assert!(fio_res.is_ok());
 
