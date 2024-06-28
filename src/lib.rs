@@ -1,8 +1,7 @@
-mod index;
-<<<<<<< Updated upstream
 mod data;
-=======
+mod errors;
+mod fio;
+mod index;
 
 pub mod db;
 pub mod options;
->>>>>>> Stashed changes

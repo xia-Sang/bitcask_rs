@@ -1,11 +1,3 @@
-<<<<<<< Updated upstream
-#[derive(Clone,Copy,Debug)]
-pub struct LogRecordPos{
-    pub(crate)file_id:u32,
-    pub(crate)offset:u64,
-    // 这是一段测试代码
-}
-=======
 #[derive(PartialEq)]
 pub enum LogRecordType {
     NORMAL = 1,
@@ -28,4 +20,3 @@ impl LogRecord {
         todo!()
     }
 }
->>>>>>> Stashed changes
