@@ -14,7 +14,10 @@ pub struct LogRecordPos {
     pub(crate) file_id: u32,
     pub(crate) offset: u64,
 }
-
+pub struct ReadLogRecord {
+    pub(crate) record: LogRecord,
+    pub(crate) size: u64,
+}
 impl LogRecord {
     pub fn encode(&mut self) -> Vec<u8> {
         todo!()

@@ -1,6 +1,6 @@
-use std::{error, result};
+use std::result;
 use thiserror::Error;
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Errors {
     #[error("failed to read from data file")]
     FailedToReadFromDataFile,
@@ -22,10 +22,10 @@ pub enum Errors {
 
     #[error("index update failed")]
     IndexUpdateFailed,
-    
+
     #[error("data file not found")]
     DataFileNotFound,
-    
+
     #[error("dir path is empty")]
     DirPathIsEmpty,
 
@@ -35,5 +35,10 @@ pub enum Errors {
     FailedToCreateDataBaseDir,
     #[error("failed to read database dir")]
     FailedToReadDataBaseDir,
+    #[error("database dir was corruprted")]
+    DataDirectoryCorrupted,
+
+    #[error("read data file eof")]
+    ReadDataFileEOF,
 }
 pub type Result<T> = result::Result<T, Errors>;

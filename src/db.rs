@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc, u32};
 
 use crate::{
     data::{
-        data_file::DataFile,
+        data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
         log_record::{LogRecord, LogRecordPos, LogRecordType},
     },
     errors::{Errors, Result},
@@ -13,27 +13,54 @@ use bytes::Bytes;
 use log::warn;
 use parking_lot::RwLock;
 
+const INITIAL_FILE_ID: u32 = 0;
 pub struct Engine {
     options: Arc<Options>,
     active_file: Arc<RwLock<DataFile>>,
     older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
     index: Box<dyn index::Indexer>,
+    file_ids: Vec<u32>,
 }
 impl Engine {
-    pub fn open(opts:Options)->Result<Self>{
-        if let Some(e)=check_options(&opts){
+    pub fn open(opts: Options) -> Result<Self> {
+        if let Some(e) = check_options(&opts) {
             return Err(e);
         }
-        let options=opts.clone();
+        let options = opts.clone();
 
-        let dir_path=options.dir_path.clone();
-        if !dir_path.is_dir(){
-            if let Err(e)=fs::create_dir_all(dir_path){
-                warn!("create database directory err:{}",e);
+        let dir_path = options.dir_path.clone();
+        if !dir_path.is_dir() {
+            if let Err(e) = fs::create_dir_all(dir_path.clone()) {
+                warn!("create database directory err:{}", e);
                 return Err(Errors::FailedToCreateDataBaseDir);
             }
         }
-        Ok(())
+        let mut data_files = load_data_files(dir_path.clone())?;
+
+        let mut file_ids = Vec::new();
+        for v in data_files.iter() {
+            file_ids.push(v.get_file_id());
+        }
+
+        let mut older_files = HashMap::new();
+        if data_files.len() > 1 {
+            for _ in 0..=data_files.len() - 2 {
+                let file = data_files.pop().unwrap();
+                older_files.insert(file.get_file_id(), file);
+            }
+        }
+        let active_file = match data_files.pop() {
+            Some(v) => v,
+            None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
+        };
+        let engine = Self {
+            options: Arc::new(opts),
+            active_file: Arc::new(RwLock::new(active_file)),
+            older_files: Arc::new(RwLock::new(older_files)),
+            index: Box::new(index::new_index(options.index_type)),
+            file_ids: file_ids,
+        };
+        Ok(engine)
     }
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         if key.is_empty() {
@@ -62,13 +89,16 @@ impl Engine {
         let active_file = self.active_file.read();
         let older_files = self.older_files.read();
         let log_record = match active_file.get_file_id() == log_record_pos.file_id {
-            true => active_file.read_log_record(log_record_pos.offset)?,
+            true => active_file.read_log_record(log_record_pos.offset)?.record,
             false => {
                 let data_file = older_files.get(&log_record_pos.file_id);
                 if data_file.is_none() {
                     return Err(Errors::DataFileNotFound);
                 }
-                data_file.unwrap().read_log_record(log_record_pos.offset)?
+                data_file
+                    .unwrap()
+                    .read_log_record(log_record_pos.offset)?
+                    .record
             }
         };
 
@@ -106,31 +136,96 @@ impl Engine {
             offset: write_off,
         })
     }
+    fn load_index_from_data_files(&mut self) -> Result<()> {
+        if self.file_ids.is_empty() {
+            return Ok(());
+        }
+        let active_file = self.active_file.read();
+        let older_files = self.older_files.read();
+
+        for (i, file_id) in self.file_ids.iter().enumerate() {
+            let mut offset = 0;
+            loop {
+                let log_record_res = match *file_id == active_file.get_file_id() {
+                    true => active_file.read_log_record(offset),
+                    false => {
+                        let data_file = older_files.get(file_id).unwrap();
+                        data_file.read_log_record(offset)
+                    }
+                };
+                let (log_record, size) = match log_record_res {
+                    Ok(result) => (result.record, result.size),
+                    Err(e) => {
+                        if e == Errors::ReadDataFileEOF {
+                            break;
+                        }
+                        return Err(e);
+                    }
+                };
+                let log_record_pos = LogRecordPos {
+                    file_id: *file_id,
+                    offset,
+                };
+                match log_record.rec_type {
+                    LogRecordType::DElETED => self.index.delete(log_record.key.to_vec()),
+                    LogRecordType::NORMAL => {
+                        self.index.put(log_record.key.to_vec(), log_record_pos)
+                    }
+                };
+                offset += size;
+            }
+            if i == self.file_ids.len() - 1 {
+                active_file.set_write_offset(offset);
+            }
+        }
+
+        Ok(())
+    }
 }
-fn check_options(opts:&Options)->Option<Errors>{
-    let dir_path=opts.dir_path.to_str();
-    if dir_path.is_none()||dir_path.unwrap().len()==0{
+fn check_options(opts: &Options) -> Option<Errors> {
+    let dir_path = opts.dir_path.to_str();
+    if dir_path.is_none() || dir_path.unwrap().len() == 0 {
         return Some(Errors::DirPathIsEmpty);
     }
-    if opts.data_file_size<=0{
+    if opts.data_file_size <= 0 {
         return Some(Errors::DirFileSizeTooSmall);
     }
     None
 }
 
-fn load_data_files(dir_path:PathBuf)->Result<Vec<DataFile>>{
-    let dir=fs::read_dir(dir_path.clone());
-    if dir.is_err(){
+fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
+    let dir = fs::read_dir(dir_path.clone());
+    if dir.is_err() {
         return Err(Errors::FailedToReadDataBaseDir);
     }
-    let file_ids:Vec<u32>=Vec::new();
-    let data_files:Vec<DataFile>=Vec::new();
-    for file in dir.unwrap(){
-        if let Ok(entry)=file{
-            let file_os_str=entry.file_name();
-            let file_name=file_os_str.to_str().unwrap();
+    let mut file_ids: Vec<u32> = Vec::new();
+    let mut data_files: Vec<DataFile> = Vec::new();
+    for file in dir.unwrap() {
+        if let Ok(entry) = file {
+            let file_os_str = entry.file_name();
+            let file_name = file_os_str.to_str().unwrap();
 
-            if file_name
+            if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {
+                let split_names: Vec<&str> = file_name.split('.').collect();
+                let file_id = match split_names[0].parse::<u32>() {
+                    Ok(fid) => fid,
+                    Err(_) => {
+                        return Err(Errors::DataDirectoryCorrupted);
+                    }
+                };
+                file_ids.push(file_id);
+            }
         }
     }
-    Ok(())
+
+    if file_ids.is_empty() {
+        return Ok(data_files);
+    }
+    file_ids.sort();
+
+    for file_id in file_ids.iter() {
+        let data_file = DataFile::new(dir_path.clone(), *file_id)?;
+        data_files.push(data_file);
+    }
+    Ok(data_files)
+}
