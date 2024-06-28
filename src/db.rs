@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 use crate::{
     data::{
@@ -10,6 +10,7 @@ use crate::{
     options::Options,
 };
 use bytes::Bytes;
+use log::warn;
 use parking_lot::RwLock;
 
 pub struct Engine {
@@ -19,6 +20,21 @@ pub struct Engine {
     index: Box<dyn index::Indexer>,
 }
 impl Engine {
+    pub fn open(opts:Options)->Result<Self>{
+        if let Some(e)=check_options(&opts){
+            return Err(e);
+        }
+        let options=opts.clone();
+
+        let dir_path=options.dir_path.clone();
+        if !dir_path.is_dir(){
+            if let Err(e)=fs::create_dir_all(dir_path){
+                warn!("create database directory err:{}",e);
+                return Err(Errors::FailedToCreateDataBaseDir);
+            }
+        }
+        Ok(())
+    }
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         if key.is_empty() {
             return Err(Errors::KeyIsEmpty);
@@ -91,3 +107,30 @@ impl Engine {
         })
     }
 }
+fn check_options(opts:&Options)->Option<Errors>{
+    let dir_path=opts.dir_path.to_str();
+    if dir_path.is_none()||dir_path.unwrap().len()==0{
+        return Some(Errors::DirPathIsEmpty);
+    }
+    if opts.data_file_size<=0{
+        return Some(Errors::DirFileSizeTooSmall);
+    }
+    None
+}
+
+fn load_data_files(dir_path:PathBuf)->Result<Vec<DataFile>>{
+    let dir=fs::read_dir(dir_path.clone());
+    if dir.is_err(){
+        return Err(Errors::FailedToReadDataBaseDir);
+    }
+    let file_ids:Vec<u32>=Vec::new();
+    let data_files:Vec<DataFile>=Vec::new();
+    for file in dir.unwrap(){
+        if let Ok(entry)=file{
+            let file_os_str=entry.file_name();
+            let file_name=file_os_str.to_str().unwrap();
+
+            if file_name
+        }
+    }
+    Ok(())

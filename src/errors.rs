@@ -22,7 +22,18 @@ pub enum Errors {
 
     #[error("index update failed")]
     IndexUpdateFailed,
+    
     #[error("data file not found")]
     DataFileNotFound,
+    
+    #[error("dir path is empty")]
+    DirPathIsEmpty,
+
+    #[error("dir file size too small")]
+    DirFileSizeTooSmall,
+    #[error("failed to create database dir")]
+    FailedToCreateDataBaseDir,
+    #[error("failed to read database dir")]
+    FailedToReadDataBaseDir,
 }
 pub type Result<T> = result::Result<T, Errors>;
