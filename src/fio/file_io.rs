@@ -1,0 +1,158 @@
+use crate::errors::{Errors, Result};
+use log::error;
+use parking_lot::RwLock;
+use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Seek, SeekFrom, Write},
+    path::PathBuf,
+    sync::Arc,
+};
+
+use super::IOManager;
+pub struct FileIO {
+    fd: Arc<RwLock<File>>,
+}
+impl FileIO {
+    pub fn new(file_name: PathBuf) -> Result<Self> {
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .append(true)
+            .open(file_name)
+        {
+            Ok(file) => {
+                return Ok(FileIO {
+                    fd: Arc::new(RwLock::new(file)),
+                });
+            }
+            Err(e) => {
+                error!("Failed to open data file: {}", e);
+                return Err(Errors::FailedToOpenDataFile);
+            }
+        }
+    }
+}
+
+impl IOManager for FileIO {
+    fn read(&self, buf: &mut [u8], offset: u64) -> crate::errors::Result<usize> {
+        let read_guard = self.fd.read();
+        // match read_guard.read_at(buf,offset){
+        //     Ok(n)=>return Ok(n),
+        //     Err(e)=>{
+        //         error!("read from datat file err:{}",e);
+        //     return Err(Errors::FailedToReadFromDataFile);
+        //     }
+        // };
+        let mut file = read_guard
+            .try_clone()
+            .map_err(|_| Errors::FailedToReadFromDataFile)?;
+
+        if let Err(e) = file.seek(SeekFrom::Start(offset)) {
+            error!("Failed to seek to offset {}: {}", offset, e);
+            return Err(Errors::FailedToReadFromDataFile);
+        }
+
+        match file.read(buf) {
+            Ok(n) => Ok(n),
+            Err(e) => {
+                error!("Read from data file error: {}", e);
+                Err(Errors::FailedToReadFromDataFile)
+            }
+        }
+    }
+
+    fn write(&self, buf: &[u8]) -> crate::errors::Result<usize> {
+        let mut write_guard = self.fd.write();
+        match write_guard.write(buf) {
+            Ok(n) => Ok(n),
+            Err(e) => {
+                error!("Writer to data file error: {}", e);
+                Err(Errors::FailedToWriteToDataFile)
+            }
+        }
+    }
+
+    fn sync(&self) -> crate::errors::Result<()> {
+        let read_guard = self.fd.read();
+        match read_guard.sync_all() {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!("Failed to sync data file: {}", e);
+                Err(Errors::FailedToSyncDataFile)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn test_file_io_write() {
+        let path = PathBuf::from("./tmp/a.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+
+        let fio = fio_res.ok().unwrap();
+        let res1 = fio.write("key-sang".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!(8, res1.ok().unwrap());
+        let res2 = fio.write("key-xia".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!(7, res2.ok().unwrap());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
+    #[test]
+    fn test_file_to_read() {
+        let path = PathBuf::from("./tmp/b.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+
+        let fio = fio_res.ok().unwrap();
+        let res1 = fio.write("key-sang".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!(8, res1.ok().unwrap());
+        let res2 = fio.write("key-xia".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!(7, res2.ok().unwrap());
+
+        let mut buf1 = [0u8; 8];
+        let read_res1 = fio.read(&mut buf1, 0);
+        assert!(read_res1.is_ok());
+        println!("{:?}", read_res1);
+        assert_eq!(8, read_res1.ok().unwrap());
+        let mut buf2 = [0u8; 7];
+        let read_res2 = fio.read(&mut buf2, 8);
+        assert!(read_res2.is_ok());
+        assert_eq!(7, read_res2.ok().unwrap());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
+    #[test]
+    fn test_file_io_sync() {
+        let path = PathBuf::from("./tmp/c.data");
+        let fio_res = FileIO::new(path.clone());
+        assert!(fio_res.is_ok());
+
+        let fio = fio_res.ok().unwrap();
+        let res1 = fio.write("key-sang".as_bytes());
+        assert!(res1.is_ok());
+        assert_eq!(8, res1.ok().unwrap());
+        let res2 = fio.write("key-xia".as_bytes());
+        assert!(res2.is_ok());
+        assert_eq!(7, res2.ok().unwrap());
+
+        let sync_res = fio.sync();
+        assert!(sync_res.is_ok());
+
+        let res3 = fs::remove_file(path.clone());
+        assert!(res3.is_ok());
+    }
+}
