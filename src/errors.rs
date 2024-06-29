@@ -1,4 +1,4 @@
-use std::result;
+use std::{error, result};
 use thiserror::Error;
 #[derive(Error, Debug, PartialEq)]
 pub enum Errors {
@@ -40,5 +40,8 @@ pub enum Errors {
 
     #[error("read data file eof")]
     ReadDataFileEOF,
+
+    #[error("invalid log record crc")]
+    InvalidLogRecordCrc,
 }
 pub type Result<T> = result::Result<T, Errors>;

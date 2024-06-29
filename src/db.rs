@@ -197,7 +197,7 @@ impl Engine {
                 if !ok {
                     return Err(Errors::IndexUpdateFailed);
                 }
-                offset += size;
+                offset += size as u64;
             }
             if i == self.file_ids.len() - 1 {
                 active_file.set_write_offset(offset);
