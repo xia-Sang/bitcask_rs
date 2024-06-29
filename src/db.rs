@@ -71,11 +71,33 @@ impl Engine {
             value: value.to_vec(),
             rec_type: LogRecordType::NORMAL,
         };
-        let log_record = self.append_log_record(&mut record)?;
-        match self.index.put(key.to_vec(), log_record) {
+
+        let log_record_pos = self.append_log_record(&mut record)?;
+        match self.index.put(key.to_vec(), log_record_pos) {
             false => Err(Errors::IndexUpdateFailed),
             true => Ok(()),
         }
+    }
+    pub fn delete(&self, key: Bytes) -> Result<()> {
+        if key.is_empty() {
+            return Err(Errors::KeyIsEmpty);
+        }
+        let pos = self.index.get(key.to_vec());
+        if pos.is_none() {
+            return Ok(());
+        }
+        let mut record = LogRecord {
+            key: key.to_vec(),
+            value: Default::default(),
+            rec_type: LogRecordType::DElETED,
+        };
+        self.append_log_record(&mut record)?;
+
+        let ok = self.index.delete(key.to_vec());
+        if !ok {
+            return Err(Errors::IndexUpdateFailed);
+        }
+        Ok(())
     }
     pub fn get(&self, key: Bytes) -> Result<Bytes> {
         if key.is_empty() {
@@ -166,12 +188,15 @@ impl Engine {
                     file_id: *file_id,
                     offset,
                 };
-                match log_record.rec_type {
+                let ok = match log_record.rec_type {
                     LogRecordType::DElETED => self.index.delete(log_record.key.to_vec()),
                     LogRecordType::NORMAL => {
                         self.index.put(log_record.key.to_vec(), log_record_pos)
                     }
                 };
+                if !ok {
+                    return Err(Errors::IndexUpdateFailed);
+                }
                 offset += size;
             }
             if i == self.file_ids.len() - 1 {
