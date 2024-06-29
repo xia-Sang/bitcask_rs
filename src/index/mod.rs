@@ -1,5 +1,4 @@
 pub mod btree;
-use core::panic;
 
 use crate::{data::log_record::LogRecordPos, options::IndexType};
 
@@ -12,6 +11,5 @@ pub fn new_index(index_type: IndexType) -> impl Indexer {
     match index_type {
         IndexType::BTree => btree::Btree::new(),
         IndexType::SkipList => todo!(),
-        _ => panic!("unknown index type"),
     }
 }

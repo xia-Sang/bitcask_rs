@@ -42,6 +42,8 @@ impl Engine {
             file_ids.push(v.get_file_id());
         }
 
+        data_files.reverse();
+
         let mut older_files = HashMap::new();
         if data_files.len() > 1 {
             for _ in 0..=data_files.len() - 2 {
@@ -53,13 +55,14 @@ impl Engine {
             Some(v) => v,
             None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
         };
-        let engine = Self {
+        let mut engine = Self {
             options: Arc::new(opts),
             active_file: Arc::new(RwLock::new(active_file)),
             older_files: Arc::new(RwLock::new(older_files)),
             index: Box::new(index::new_index(options.index_type)),
             file_ids: file_ids,
         };
+        engine.load_index_from_data_files()?;
         Ok(engine)
     }
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
@@ -100,12 +103,13 @@ impl Engine {
         Ok(())
     }
     pub fn get(&self, key: Bytes) -> Result<Bytes> {
+        // println!("key: {:?}",key);
         if key.is_empty() {
             return Err(Errors::KeyIsEmpty);
         }
         let pos = self.index.get(key.to_vec());
         if pos.is_none() {
-            return Err(Errors::KeyIsEmpty);
+            return Err(Errors::KeyNotFound);
         }
         let log_record_pos = pos.unwrap();
         let active_file = self.active_file.read();
