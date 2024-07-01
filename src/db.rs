@@ -18,7 +18,7 @@ pub struct Engine {
     options: Arc<Options>,
     active_file: Arc<RwLock<DataFile>>,
     older_files: Arc<RwLock<HashMap<u32, DataFile>>>,
-    index: Box<dyn index::Indexer>,
+    pub(crate) index: Box<dyn index::Indexer>,
     file_ids: Vec<u32>,
 }
 impl Engine {
@@ -64,6 +64,14 @@ impl Engine {
         };
         engine.load_index_from_data_files()?;
         Ok(engine)
+    }
+    pub fn close(&self) -> Result<()> {
+        let read_guard = self.active_file.read();
+        read_guard.sync()
+    }
+    pub fn sync(&self) -> Result<()> {
+        let read_guard = self.active_file.read();
+        read_guard.sync()
     }
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         if key.is_empty() {
@@ -112,6 +120,9 @@ impl Engine {
             return Err(Errors::KeyNotFound);
         }
         let log_record_pos = pos.unwrap();
+        self.get_value_by_position(&log_record_pos)
+    }
+    pub(crate) fn get_value_by_position(&self, log_record_pos: &LogRecordPos) -> Result<Bytes> {
         let active_file = self.active_file.read();
         let older_files = self.older_files.read();
         let log_record = match active_file.get_file_id() == log_record_pos.file_id {

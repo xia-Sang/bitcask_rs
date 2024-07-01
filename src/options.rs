@@ -22,3 +22,15 @@ impl Default for Options {
         }
     }
 }
+pub struct IteratorOptions {
+    pub prefix: Vec<u8>,
+    pub reverse: bool,
+}
+impl Default for IteratorOptions {
+    fn default() -> Self {
+        Self {
+            prefix: Default::default(),
+            reverse: Default::default(),
+        }
+    }
+}

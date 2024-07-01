@@ -131,7 +131,7 @@ fn test_engine_delete() {
     let res2 = engine.delete(get_test_key(111));
     assert!(res2.is_ok());
     let res3 = engine.get(get_test_key(111));
-    
+
     assert_eq!(Errors::KeyNotFound, res3.err().unwrap());
 
     // 2.删除一个不存在的 key
