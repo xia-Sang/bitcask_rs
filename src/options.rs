@@ -34,3 +34,20 @@ impl Default for IteratorOptions {
         }
     }
 }
+
+/// 批量写数据配置项 
+pub struct WriteBatchOptions {
+    /// 一个批次当中的最大数据项 
+    pub max_batch_num: usize,
+    /// 
+    pub sync_writes: bool,
+}
+
+impl Default for WriteBatchOptions {
+    fn default() -> Self {
+        Self {
+            max_batch_num: 1000,
+            sync_writes: true,
+        }
+    }
+}
