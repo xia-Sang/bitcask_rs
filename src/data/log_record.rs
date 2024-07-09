@@ -5,12 +5,14 @@ use prost::{encode_length_delimiter, length_delimiter_len};
 pub enum LogRecordType {
     NORMAL = 1,
     DElETED = 2,
+    TxnFinish=3,
 }
 impl LogRecordType {
     pub fn from_u8(v: u8) -> Self {
-        match v {
+        match v{
             1 => LogRecordType::NORMAL,
             2 => LogRecordType::DElETED,
+            3=>LogRecordType::TxnFinish,
             _ => panic!("unknown log record type"),
         }
     }
@@ -26,6 +28,10 @@ pub struct LogRecord {
 pub struct LogRecordPos {
     pub(crate) file_id: u32,
     pub(crate) offset: u64,
+}
+pub struct TransactionRecord{
+    pub(crate)record:LogRecord,
+    pub(crate) pos:LogRecordPos,
 }
 #[derive(Debug)]
 pub struct ReadLogRecord {
