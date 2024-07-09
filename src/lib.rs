@@ -9,3 +9,4 @@ pub mod db;
 pub mod iterator;
 pub mod options;
 pub mod util;
+pub mod batch;
